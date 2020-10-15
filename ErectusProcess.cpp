@@ -1,325 +1,174 @@
-#include "ErectusInclude.h"
+#include "ErectusProcess.h"
 
-int ProcessErrorId = 0;
-char *ProcessError = nullptr;
-bool ProcessSelected = false;
-int ProcessListSize = 0;
-int ProcessIndex = 0;
-char **ProcessList = nullptr;
-DWORD *ProcessIdList = nullptr;
-bool ProcessListUpdated = false;
-int ProcessValidCounter = 0;
-bool ProcessMenuActive = false;
+#include <thread>
+#include <TlHelp32.h>
 
-DWORD Pid = 0;
-HWND Hwnd = NULL;
-DWORD64 Exe = 0;
-HANDLE Handle = NULL;
+#include "app.h"
+#include "renderer.h"
+#include "threads.h"
+#include "features/MsgSender.h"
 
-void SetProcessMenu()
+void ErectusProcess::SetProcessError(const int errorId, const char* error)
 {
-	if (WindowSize[0] != 384 || WindowSize[1] != 224)
-	{
-		WindowSize[0] = 384;
-		WindowSize[1] = 224;
-
-		if (WindowHwnd != NULL)
-		{
-			DeviceResetQueued = true;
-			SetWindowPos(WindowHwnd, HWND_NOTOPMOST, WindowPosition[0], WindowPosition[1], WindowSize[0], WindowSize[1], 0);
-		}
-	}
-
-	int BufferPosition[2];
-	BufferPosition[0] = (GetSystemMetrics(SM_CXSCREEN) / 2) - (WindowSize[0] / 2);
-	BufferPosition[1] = (GetSystemMetrics(SM_CYSCREEN) / 2) - (WindowSize[1] / 2);
-
-	if (WindowPosition[0] != BufferPosition[0] || WindowPosition[1] != BufferPosition[1])
-	{
-		WindowPosition[0] = BufferPosition[0];
-		WindowPosition[1] = BufferPosition[1];
-
-		if (WindowHwnd != NULL)
-		{
-			MoveWindow(WindowHwnd, WindowPosition[0], WindowPosition[1], WindowSize[0], WindowSize[1], FALSE);
-			if (!DeviceResetQueued)
-			{
-				SetWindowPos(WindowHwnd, HWND_NOTOPMOST, WindowPosition[0], WindowPosition[1], WindowSize[0], WindowSize[1], 0);
-			}
-		}
-	}
-
-	if (WindowHwnd != NULL)
-	{
-		LONG_PTR Style = GetWindowLongPtr(WindowHwnd, GWL_EXSTYLE);
-
-		if (Style & WS_EX_LAYERED)
-		{
-			Style &= ~WS_EX_LAYERED;
-			SetWindowLongPtr(WindowHwnd, GWL_EXSTYLE, Style);
-		}
-
-		if (Style & WS_EX_TOPMOST)
-		{
-			SetWindowPos(WindowHwnd, HWND_NOTOPMOST, WindowPosition[0], WindowPosition[1], WindowSize[0], WindowSize[1], 0);
-		}
-	}
-
-	ProcessMenuActive = true;
-	OverlayMenuActive = false;
-	OverlayActive = false;
+	if (errorId == -1)
+		return;
+	processErrorId = errorId;
+	processError = error;
 }
 
-void SetProcessError(int ErrorId, const char *Error, size_t Length)
+void ErectusProcess::ResetProcessData()
 {
-	if (ProcessError != nullptr)
-	{
-		delete[]ProcessError;
-		ProcessError = nullptr;
-	}
+	SetProcessError(0, "Process State: No process selected");
 
-	if (ErrorId != -1)
+	if (Threads::threadCreationState)
 	{
-		ProcessErrorId = ErrorId;
-		ProcessError = new char[Length];
-		sprintf_s(ProcessError, Length, Error);
-	}
-}
+		auto areThreadsActive = false;
 
-void ResetProcessData(bool ClearProcessError, int NewProcessListSize)
-{
-	if (ProcessList != nullptr)
-	{
-		if (ProcessListSize)
+		while (!Threads::ThreadDestruction())
 		{
-			for (int i = 0; i < ProcessListSize; i++)
+			Threads::threadDestructionCounter++;
+			if (Threads::threadDestructionCounter > 1440)
 			{
-				if (ProcessList[i] != nullptr)
-				{
-					delete[]ProcessList[i];
-					ProcessList[i] = nullptr;
-				}
-			}
-		}
-
-		delete[]ProcessList;
-		ProcessList = nullptr;
-	}
-
-	if (ProcessIdList != nullptr)
-	{
-		delete[]ProcessIdList;
-		ProcessIdList = nullptr;
-	}
-
-	ProcessSelected = false;
-	ProcessIndex = 0;
-
-	if (NewProcessListSize)
-	{
-		ProcessListSize = NewProcessListSize;
-		ProcessList = new char*[ProcessListSize];
-		ProcessList[ProcessIndex] = new char[sizeof("No process selected")];
-		sprintf_s(ProcessList[ProcessIndex], sizeof("No process selected"), "No process selected");
-		ProcessIdList = new DWORD[ProcessListSize];
-		ProcessIdList[ProcessIndex] = 0;
-
-		if (!ProcessMenuActive)
-		{
-			SetProcessMenu();
-		}
-
-		if (ClearProcessError)
-		{
-			SetProcessError(0, "Process State: No process selected", sizeof("Process State: No process selected"));
-		}
-	}
-	else
-	{
-		ProcessListSize = 0;
-		SetProcessError(-1, "", sizeof(""));
-	}
-
-	if (ThreadCreationState)
-	{
-		bool AreThreadsActive = false;
-
-		while (!ThreadDestruction())
-		{
-			ThreadDestructionCounter++;
-			if (ThreadDestructionCounter > 14400)
-			{
-				AreThreadsActive = true;
-
-				if (NewProcessListSize)
-				{
-					Close();
-				}
-
+				areThreadsActive = true;
+				gApp->Shutdown();
 				break;
 			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 
-		if (!AreThreadsActive)
-		{
-			MessagePatcher(false);
-		}
+		if (!areThreadsActive)
+			MsgSender::Patcher(false);
 	}
 
-	if (CustomEntityListUpdated)
-	{
-		DeleteCustomEntityList();
-	}
+	pid = 0;
+	hWnd = nullptr;
+	exe = 0;
 
-	if (CustomNPCListUpdated)
+	if (handle != nullptr)
 	{
-		DeleteCustomNPCList();
-	}
-
-	if (CustomPlayerListUpdated)
-	{
-		DeleteCustomPlayerList();
-	}
-
-	Pid = 0;
-	Hwnd = NULL;
-	Exe = 0;
-
-	if (Handle != NULL)
-	{
-		CloseHandle(Handle);
-		Handle = NULL;
+		CloseHandle(handle);
+		handle = nullptr;
 	}
 }
 
-int GetProcessCount()
+std::vector<DWORD> ErectusProcess::GetProcesses()
 {
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hSnapshot == INVALID_HANDLE_VALUE) return 1;
+	std::vector<DWORD> result{ 0 };
+
+	auto* const hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (hSnapshot == INVALID_HANDLE_VALUE)
+		return result;
 
 	PROCESSENTRY32 lppe;
-	lppe.dwSize = sizeof(lppe);
+	lppe.dwSize = sizeof lppe;
 
-	int ProcessCount = 1;
 	while (Process32Next(hSnapshot, &lppe))
 	{
 		if (!strcmp(lppe.szExeFile, "Fallout76.exe"))
-		{
-			ProcessCount++;
-		}
+			result.push_back(lppe.th32ProcessID);
 	}
 
 	CloseHandle(hSnapshot);
-	return ProcessCount;
+
+	return result;
 }
 
-bool UpdateProcessList()
+bool ErectusProcess::Rpm(const std::uintptr_t src, void* dst, const size_t size)
 {
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hSnapshot == INVALID_HANDLE_VALUE) return false;
-
-	PROCESSENTRY32 lppe;
-	lppe.dwSize = sizeof(lppe);
-
-	int ProcessCount = GetProcessCount();
-	if (ProcessCount == 1)
-	{
-		CloseHandle(hSnapshot);
-		return false;
-	}
-	else
-	{
-		ResetProcessData(true, ProcessCount);
-	}
-
-	int CurrentProcess = 0;
-	while (Process32Next(hSnapshot, &lppe))
-	{
-		if (!strcmp(lppe.szExeFile, "Fallout76.exe"))
-		{
-			CurrentProcess++;
-			ProcessList[CurrentProcess] = new char[sizeof("Fallout76.exe - 4294967295")];
-			sprintf_s(ProcessList[CurrentProcess], sizeof("Fallout76.exe - 4294967295"), "Fallout76.exe - %lu", lppe.th32ProcessID);
-			ProcessIdList[CurrentProcess] = lppe.th32ProcessID;
-		}
-	}
-
-	CloseHandle(hSnapshot);
-	return true;
+	return ReadProcessMemory(handle, reinterpret_cast<void*>(src), dst, size, nullptr);
 }
 
-BOOL HwndEnumFunc(HWND hwnd, LPARAM lParam)
+bool ErectusProcess::Wpm(const std::uintptr_t dst, const void* src, const size_t size)
+{
+	return WriteProcessMemory(handle, reinterpret_cast<void*>(dst), src, size, nullptr);
+}
+
+std::uintptr_t ErectusProcess::AllocEx(const size_t size)
+{
+	//this needs to be split, the game scans for PAGE_EXECUTE_READWRITE regions
+	//1) alloc with PAGE_READWRITE
+	//2) write the data
+	//3) switch to PAGE_EXECUTE_READ
+	//4) create the remote thread
+	//see https://reverseengineering.stackexchange.com/questions/3482/does-code-injected-into-process-memory-always-belong-to-a-page-with-rwx-access
+	return reinterpret_cast<std::uintptr_t>(VirtualAllocEx(handle, nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
+}
+
+bool ErectusProcess::FreeEx(const std::uintptr_t src)
+{
+	return VirtualFreeEx(handle, reinterpret_cast<void*>(src), 0, MEM_RELEASE);
+}
+
+BOOL ErectusProcess::HwndEnumFunc(const HWND hwnd, const LPARAM lParam)
 {
 	DWORD lpdwProcessId;
 	GetWindowThreadProcessId(hwnd, &lpdwProcessId);
 
 	if (lpdwProcessId == lParam)
 	{
-		char Buffer[sizeof("Fallout76")] = { '\0' };
-		if (GetClassName(hwnd, Buffer, sizeof(Buffer)))
+		char buffer[sizeof"Fallout76"] = { '\0' };
+		if (GetClassName(hwnd, buffer, sizeof buffer))
 		{
-			if (!strcmp(Buffer, "Fallout76"))
+			if (!strcmp(buffer, "Fallout76"))
 			{
-				Hwnd = hwnd;
+				hWnd = hwnd;
 				return FALSE;
 			}
 		}
 	}
 
-	Hwnd = NULL;
+	hWnd = nullptr;
 	return TRUE;
 }
 
-bool HwndValid(DWORD ProcessId)
+bool ErectusProcess::HwndValid(const DWORD processId)
 {
-	Pid = ProcessId;
-	if (!Pid)
+	pid = processId;
+	if (!pid)
 	{
-		SetProcessError(2, "Process State: PID (Process Id) invalid", sizeof("Process State: PID (Process Id) invalid"));
+		SetProcessError(2, "Process State: PID (Process Id) invalid");
 		return false;
 	}
 
-	EnumWindows(WNDENUMPROC(HwndEnumFunc), Pid);
-	if (Hwnd == NULL)
+	EnumWindows(static_cast<WNDENUMPROC>(HwndEnumFunc), pid);
+	if (hWnd == nullptr)
 	{
-		SetProcessError(2, "Process State: HWND (Window) invalid", sizeof("Process State: HWND (Window) invalid"));
+		SetProcessError(2, "Process State: HWND (Window) invalid");
 		return false;
 	}
 
-	BOOL Minimized = IsIconic(Hwnd);
-	if (Minimized == TRUE)
+	if (IsIconic(hWnd))
 	{
-		SetProcessError(2, "Process State: HWND (Window) minimized", sizeof("Process State: HWND (Window) minimized"));
+		SetProcessError(2, "Process State: HWND (Window) minimized");
 		return false;
 	}
 
-	RECT Rect;
-	if (GetClientRect(Hwnd, &Rect) == FALSE || Rect.right < 16 || Rect.bottom < 16)
+	RECT rect;
+	if (GetClientRect(hWnd, &rect) == FALSE || rect.right < 16 || rect.bottom < 16)
 	{
-		SetProcessError(2, "Process State: HWND (Window) invalid/minimized", sizeof("Process State: HWND (Window) invalid/minimized"));
+		SetProcessError(2, "Process State: HWND (Window) invalid/minimized");
 		return false;
 	}
 
-	SetProcessError(1, "Process State: Process selected", sizeof("Process State: Process selected"));
+	SetProcessError(1, "Process State: Process selected");
 	return true;
 }
 
-DWORD64 GetModuleBaseAddress(DWORD ProcessId, const char *Module)
+std::uintptr_t ErectusProcess::GetModuleBaseAddress(const DWORD procId, const char* module)
 {
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessId);
-	if (hSnapshot == INVALID_HANDLE_VALUE) return 0;
+	auto* const hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, procId);
+	if (hSnapshot == INVALID_HANDLE_VALUE)
+		return 0;
 
 	MODULEENTRY32 lpme;
-	lpme.dwSize = sizeof(lpme);
+	lpme.dwSize = sizeof lpme;
 
 	while (Module32Next(hSnapshot, &lpme))
 	{
-		if (!strcmp(lpme.szModule, Module))
+		if (!strcmp(lpme.szModule, module))
 		{
 			CloseHandle(hSnapshot);
-			return DWORD64(lpme.modBaseAddr);
+			return reinterpret_cast<std::uintptr_t>(lpme.modBaseAddr);
 		}
 	}
 
@@ -327,29 +176,33 @@ DWORD64 GetModuleBaseAddress(DWORD ProcessId, const char *Module)
 	return 0;
 }
 
-bool ProcessValid(DWORD ProcessId)
+bool ErectusProcess::AttachToProcess(const DWORD processId)
 {
-	Pid = ProcessId;
-	if (!Pid)
+	if (pid == processId)
+		return  true;
+
+	ResetProcessData();
+
+	if (processId == 0)
+		return false;
+
+	pid = processId;
+
+	exe = GetModuleBaseAddress(pid, "Fallout76.exe");
+	if (!exe)
 	{
-		SetProcessError(2, "Process State: PID (Process Id) invalid", sizeof("Process State: PID (Process Id) invalid"));
+		SetProcessError(2, "Process State: Base Address invalid");
 		return false;
 	}
 
-	Exe = GetModuleBaseAddress(Pid, "Fallout76.exe");
-	if (!Exe)
+	handle = OpenProcess(PROCESS_ALL_ACCESS, false, pid);
+	if (handle == nullptr || !HwndValid(processId))
 	{
-		SetProcessError(2, "Process State: Base Address invalid", sizeof("Process State: Base Address invalid"));
+		SetProcessError(2, "Process State: HANDLE invalid");
 		return false;
 	}
 
-	Handle = OpenProcess(PROCESS_ALL_ACCESS, false, Pid);
-	if (Handle == NULL)
-	{
-		SetProcessError(2, "Process State: HANDLE invalid", sizeof("Process State: HANDLE invalid"));
-		return false;
-	}
+	SetProcessError(1, "Process State: Process selected");
 
-	SetProcessError(1, "Process State: Process selected", sizeof("Process State: Process selected"));
 	return true;
 }
