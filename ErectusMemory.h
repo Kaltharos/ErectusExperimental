@@ -51,13 +51,13 @@ public:
 	std::uint32_t sourceEntityId;//0x8
 	std::uint32_t playerEntityId;//0xC
 	BYTE bShouldSendResult;//0x10
-	BYTE padding0X11[3];
+	char padding0011[3];
 	std::uint32_t destEntityId;//0x14
 	std::uint32_t itemServerHandleId;//0x18
 	std::uint32_t stashAccessEntityId;//0x1C
 	BYTE bCreateIfMissing;//0x20
 	BYTE bIsExpectingResult;//0x21
-	BYTE padding0X22[2];//0x22
+	char padding0022[2];//0x22
 	int count;//0x24
 };
 
@@ -77,11 +77,11 @@ class LeveledList
 {
 public:
 	std::uintptr_t vtable;//0x0
-	BYTE padding0008[0x18];
+	char padding0008[0x18];
 	std::uint32_t formId;//0x20
-	BYTE padding0024[0x8C];
+	char padding0024[0x8C];
 	std::uintptr_t listEntryArrayPtr;//0xB0
-	BYTE padding00B8[0x9];
+	char padding00B8[0x9];
 	BYTE listEntryArraySize;//0xC1
 };
 
@@ -105,10 +105,10 @@ class ClientAccount
 {
 public:
 	std::uintptr_t vtable;//0x0
-	BYTE padding0008[0x8];
+	char padding0008[0x8];
 	BYTE nameData[0x10];//0x10
 	int nameLength;//0x20
-	BYTE padding0024[0x58];
+	char padding0024[0x58];
 	std::uint32_t formId;//0x7C
 };
 
@@ -123,22 +123,22 @@ class ReferenceList
 {
 public:
 	std::uintptr_t arrayPtr;//0x0
-	BYTE padding0008[0x8];
+	char padding0008[0x8];
 	int arraySize;//0x10
 };
 
 class ItemCount
 {
 public:
-	BYTE padding0000[0x8];
+	char padding0000[0x8];
 	int count;//0x8
-	BYTE padding000C[0x4];
+	char padding000C[0x4];
 };
 
 class ItemInstancedArray
 {
 public:
-	BYTE padding0000[0x10];
+	char padding0000[0x10];
 	std::uintptr_t arrayPtr;//0x10
 	std::uintptr_t arrayEnd;//0x18
 };
@@ -147,7 +147,7 @@ class ExtraTextDisplayData
 {
 public:
 	std::uintptr_t vtable;//0x0
-	BYTE padding0008[0x8];
+	char padding0008[0x8];
 	std::uintptr_t instancedNamePtr;//0x10
 };
 
@@ -157,7 +157,7 @@ public:
 	std::uintptr_t vtable;//0x0
 	std::uintptr_t hitsArrayPtr;//0x8
 	std::uintptr_t hitsArrayEnd;//0x10
-	BYTE padding0018[0x48];
+	char padding0018[0x48];
 };
 
 class BgsQuestText
@@ -165,7 +165,7 @@ class BgsQuestText
 public:
 	std::uintptr_t vtable;//0x0
 	std::uintptr_t formIdPtr;//0x8
-	BYTE padding0010[0x28];
+	char padding0010[0x28];
 	std::uintptr_t codePtr;//0x38
 };
 
@@ -200,7 +200,7 @@ public:
 class ObjectInstanceExtra
 {
 public:
-	BYTE padding0000[0x10];
+	char padding0000[0x10];
 	std::uintptr_t modDataPtr;//0x10
 };
 
@@ -218,7 +218,7 @@ public:
 	BYTE uAckIndex;//0x20 (Shots Hit, Always > 0)
 	BYTE uFireId;//0x21 (Shots Fired)
 	BYTE bPredictedKill;//0x22
-	BYTE padding0023;//0x23 (0)
+	char padding0023;//0x23 (0)
 	float explosionLocationX;//0x24
 	float explosionLocationY;//0x28
 	float explosionLocationZ;//0x2C
@@ -226,10 +226,9 @@ public:
 	BYTE bVatsAttack;//0x34
 	BYTE bVatsCritical;//0x35
 	BYTE bTargetWasDead;//0x36
-	BYTE padding0037;//0x37 (0)
+	char padding0037;//0x37 (0)
 };
 
-//unknown
 class RequestTeleportMessage
 {
 public:
@@ -249,7 +248,7 @@ public:
 class Chargen
 {
 public:
-	BYTE padding[0x28];
+	char padding[0x28];
 	float thin;//0x28
 	float muscular;//0x2C
 	float large;//0x30
@@ -286,45 +285,6 @@ public:
 	std::uintptr_t rdx{};				//0x30 (0x10)
 	std::uintptr_t r8{};				//0x38 (0x18)
 	std::uintptr_t r9{};				//0x40 (0x20)
-};
-
-class Opk
-{
-public:
-	BYTE opkAsm[0x70]
-	{
-		0x31, 0xC0,                                     //xor eax, eax
-		0x3B, 0x05, 0x68, 0x00, 0x00, 0x00,             //cmp eax, [OpkPlayers]
-		0x74, 0x14,                                     //je OpkNpcsCheck
-		0x8B, 0x87, 0xC0, 0x03, 0x00, 0x00,             //mov eax,[rdi+000003C0]
-		0x83, 0xF8, 0x02,                               //cmp eax, 02
-		0x75, 0x09,                                     //jne OpkNpcsCheck
-		0x0F, 0x28, 0x05, 0x64, 0x00, 0x00, 0x00,       //movaps xmm0, [OpkPlayerPosition]
-		0xEB, 0x2A,                                     //jmp OriginalFunction
-		0x31, 0xC0,                                     //xor eax, eax
-		0x3B, 0x05, 0x4E, 0x00, 0x00, 0x00,             //cmp eax, [OpkNpcs]
-		0x74, 0x14,                                     //je OriginalFunction
-		0x8B, 0x87, 0xC0, 0x03, 0x00, 0x00,             //mov eax,[rdi+000003C0]
-		0x83, 0xF8, 0x03,                               //cmp eax, 03
-		0x75, 0x09,                                     //jne OriginalFunction
-		0x0F, 0x28, 0x05, 0x56, 0x00, 0x00, 0x00,       //movaps xmm0, [OpkNpcPosition]
-		0xEB, 0x0C,                                     //jmp OriginalFunction
-		0x0F, 0x10, 0x87, 0x90, 0x04, 0x00, 0x00,       //movups xmm0,[rdi+00000490]
-		0x0F, 0x58, 0x45, 0xA7,                         //addps xmm0,[rbp-59]
-		0x90,                                           //nop 
-		0x0F, 0x29, 0x45, 0xF7,                         //movaps [rbp-09],xmm0
-		0x48, 0x8D, 0x05, 0x25, 0x00, 0x00, 0x00,       //lea rax,[FunctionReturn]
-		0x48, 0x8B, 0x00,                               //mov rax,[rax]
-		0xFF, 0xE0,                                     //jmp rax
-		0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //Padding
-		0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //Padding
-		0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //Padding
-	};
-	int opkPlayers = 0;
-	int opkNpcs = 0;
-	std::uintptr_t originalFunction = 0;
-	float opkPlayerPosition[4]{};
-	float opkNpcPosition[4]{};
 };
 
 class FreezeAp
@@ -452,10 +412,6 @@ public:
 	static bool SetClientState(std::uintptr_t clientState);
 	static void Noclip(bool enabled);
 
-	//opk
-	static bool SetOpkData(std::uintptr_t opkPage, bool enabled);
-	static bool OnePositionKill(std::uintptr_t& opkPage, bool& opkPageValid, bool enabled);
-
 	//item transfer
 	static bool CheckItemTransferList();
 	static bool TransferItems(std::uint32_t sourceFormId, std::uint32_t destinationFormId);
@@ -494,6 +450,8 @@ public:
 	static bool CheckReferenceKeywordBook(const TesItem& referenceData, std::uint32_t formId);
 
 private:
+	[[nodiscard]] static std::uint32_t GenerateCrc32(std::uint32_t formId) noexcept;
+
 	static std::array<int, 8> GetNukeCode(std::uint32_t formId);
 	static std::string GetPlayerName(const ClientAccount& clientAccountData);
 
@@ -503,8 +461,6 @@ private:
 	static bool IsRecipeKnown(std::uint32_t formId);
 
 	static bool MovePlayer();
-
-	static bool CheckOpkDistance(std::uintptr_t opkPage);
 
 	static std::uint32_t GetEntityId(const TesObjectRefr& entityData);
 	static bool SendHitsToServer(Hits* hitsData, size_t hitsDataSize);
